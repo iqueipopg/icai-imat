@@ -98,13 +98,31 @@ def load_data(
 
     # define dataloaders
     train_dataloader: DataLoader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+        persistent_workers=True,
+        prefetch_factor=2,
     )
     val_dataloader: DataLoader = DataLoader(
-        val_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+        persistent_workers=True,
+        prefetch_factor=2,
     )
     test_dataloader: DataLoader = DataLoader(
-        test_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+        persistent_workers=True,
+        prefetch_factor=2,
     )
 
     return train_dataloader, val_dataloader, test_dataloader

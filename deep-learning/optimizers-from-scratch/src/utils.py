@@ -43,6 +43,13 @@ class StepLR(torch.optim.lr_scheduler.LRScheduler):
         """
 
         # TODO
+        self.optimizer = optimizer
+        self.step_size = step_size
+        self.gamma = gamma
+        self.current_epoch = -1
+        self.counters = 0
+
+        super(StepLR, self).__init__(optimizer)
 
     def step(self, epoch: Optional[int] = None) -> None:
         """
@@ -53,6 +60,15 @@ class StepLR(torch.optim.lr_scheduler.LRScheduler):
         """
 
         # TODO
+        # Aumentamos el contador de ciclos (épocas)
+        self.current_epoch += 1
+
+        # Verificamos si es momento de ajustar la tasa de aprendizaje
+        if self.current_epoch > 0 and self.current_epoch % self.step_size == 0:
+            # Iteramos sobre cada conjunto de hiperparámetros del optimizador
+            for param_set in self.optimizer.param_groups:
+                # Disminuimos la tasa de aprendizaje según el factor de ajuste
+                param_set["lr"] = param_set["lr"] * self.gamma
 
 
 def get_dropout_random_indexes(shape: torch.Size, p: float) -> torch.Tensor:
