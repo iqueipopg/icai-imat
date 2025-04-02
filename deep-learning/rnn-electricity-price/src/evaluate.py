@@ -1,9 +1,6 @@
 import torch
-from torch.jit import RecursiveScriptModule
-from torch.utils.data import DataLoader
-import numpy as np
 from src.data import load_data
-from src.utils import Accuracy, set_seed, load_model
+from src.utils import set_seed, load_model
 from src.train_functions import t_step
 
 # Set device

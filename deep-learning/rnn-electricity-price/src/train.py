@@ -1,10 +1,8 @@
 # deep learning libraries
 import torch
-from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 # other libraries
-from tqdm.auto import tqdm
 from typing import Final
 
 # own modules
