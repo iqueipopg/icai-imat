@@ -1,5 +1,6 @@
 # deep learning libraries
 import torch
+import torch.nn as nn
 
 # other libraries
 import math
@@ -49,6 +50,31 @@ class RNNFunction(torch.autograd.Function):
         """
 
         # TODO
+        batch_size, seq_len, _ = inputs.shape
+        hidden_size = h0.shape[2]
+
+        # Inicializar el tensor de salida
+        outputs = torch.zeros(
+            batch_size, seq_len, hidden_size, device=inputs.device
+        ).double()
+        h_t = h0.squeeze(0)
+
+        for t in range(seq_len):
+            h_t = (
+                torch.matmul(inputs[:, t], weight_ih.T)
+                + bias_ih
+                + torch.matmul(h_t, weight_hh.T)
+                + bias_hh
+            )
+            h_t[h_t <= 0] = 0  # ReLU
+
+            outputs[:, t] = h_t  # Guardamos salida sin activacion
+
+        ctx.save_for_backward(
+            inputs, h0, weight_ih, weight_hh, bias_ih, bias_hh, outputs
+        )
+
+        return outputs, h_t.unsqueeze(0)
 
     @staticmethod
     def backward(  # type: ignore
@@ -82,6 +108,51 @@ class RNNFunction(torch.autograd.Function):
         """
 
         # TODO
+        inputs, h0, weight_ih, weight_hh, bias_ih, bias_hh, outputs = ctx.saved_tensors
+        batch_size, seq_len, _ = inputs.shape
+
+        grad_inputs = torch.zeros_like(inputs)
+        grad_h0 = torch.zeros_like(h0)
+        grad_weight_ih = torch.zeros_like(weight_ih)
+        grad_weight_hh = torch.zeros_like(weight_hh)
+        grad_bias_ih = torch.zeros_like(bias_ih)
+        grad_bias_hh = torch.zeros_like(bias_hh)
+
+        grad_h_t = grad_hn.squeeze(0)
+
+        for t in reversed(range(seq_len)):
+            grad_h_t = grad_h_t + grad_output[:, t]  # Acumulamos gradientes
+
+            # Aplicar la derivada de ReLU: ReLU' = 1 si h > 0, 0 si h <= 0
+            grad_h_t *= (outputs[:, t] > 0).float()
+
+            # Gradientes de los pesos y biases
+            grad_weight_ih += grad_h_t.T @ inputs[:, t]
+            if t > 0:
+                grad_weight_hh += grad_h_t.T @ outputs[:, t - 1]
+            else:
+                grad_weight_hh += grad_h_t.T @ h0.squeeze(0)
+
+            grad_bias_ih += grad_h_t.sum(dim=0)
+            grad_bias_hh += grad_h_t.sum(dim=0)
+
+            # Gradientes respecto a la entrada
+            grad_inputs[:, t] = grad_h_t @ weight_ih
+
+            # Propagamos el gradiente hacia el estado oculto anterior
+            grad_h_t = grad_h_t @ weight_hh
+
+        # Guardamos el gradiente final de h0
+        grad_h0 = grad_h_t.unsqueeze(0)
+
+        return (
+            grad_inputs,
+            grad_h0,
+            grad_weight_ih,
+            grad_weight_hh,
+            grad_bias_ih,
+            grad_bias_hh,
+        )
 
 
 class RNN(torch.nn.Module):
@@ -155,6 +226,17 @@ class MyModel(torch.nn.Module):
         """
 
         # TODO
+        super().__init__()
+        self.hidden_size: int = hidden_size
+        self.input_size: int = 24
+        self.lstm = nn.LSTM(
+            input_size=self.input_size,
+            hidden_size=self.hidden_size,
+            num_layers=5,
+            batch_first=True,
+            dropout=0.4,
+        )
+        self.fc = nn.Linear(self.hidden_size, 24)
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         """
@@ -168,3 +250,7 @@ class MyModel(torch.nn.Module):
         """
 
         # TODO
+        inputs = inputs.float()
+        output, (h_t, c_n) = self.lstm(inputs)
+        h_n = h_t[-1]
+        return self.fc(h_n)

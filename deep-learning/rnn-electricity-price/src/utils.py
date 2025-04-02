@@ -18,6 +18,7 @@ def parameters_to_double(model: torch.nn.Module) -> None:
     """
 
     # TODO
+    model.double()
 
 
 def save_model(model: torch.nn.Module, name: str) -> None:

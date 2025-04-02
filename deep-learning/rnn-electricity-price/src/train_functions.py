@@ -3,6 +3,7 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 # other libraries
 from typing import Optional
@@ -36,6 +37,39 @@ def train_step(
     """
 
     # TODO
+    model.to(device)
+    model.train()
+    loss_run: float = 0.0
+
+    for idx, (inputs, targets) in enumerate(tqdm(train_data, desc="Training")):
+        inputs, targets = inputs.to(device), targets.to(device)
+
+        # Normalize targets
+        targets = ((targets - mean) / std).float()
+
+        # Zero gradients
+        optimizer.zero_grad(set_to_none=True)
+
+        # Forward pass
+        outputs = model(inputs)
+
+        # Calculate loss
+        batch_loss = loss(outputs, targets)
+        batch_loss.backward()
+        optimizer.step()
+
+        loss_run += batch_loss.item()
+
+        if idx % 10 == 0:  # Log every 10 batches
+            writer.add_scalar(
+                "Training Loss",
+                batch_loss.item(),
+                epoch * len(train_data) + idx,
+            )
+
+    avg_loss: float = loss_run / len(train_data)
+    writer.add_scalar("Epoch Training Loss", avg_loss, epoch)
+    return avg_loss
 
 
 @torch.no_grad()
@@ -66,6 +100,30 @@ def val_step(
     """
 
     # TODO
+    model.to(device)
+    model.eval()
+    loss_run: float = 0.0
+
+    for idx, (inputs, targets) in enumerate(tqdm(val_data, desc="Validation")):
+        inputs, targets = inputs.to(device), targets.to(device)
+
+        # Normalize targets
+        targets = ((targets - mean) / std).float()
+
+        # Forward pass
+        outputs = model(inputs)
+
+        # Calculate loss
+        batch_loss = loss(outputs, targets)
+        loss_run += batch_loss.item()
+
+    avg_loss: float = loss_run / len(val_data)
+    writer.add_scalar("Validation Loss", avg_loss, epoch)
+
+    if scheduler is not None:
+        scheduler.step(avg_loss)
+
+    return avg_loss
 
 
 @torch.no_grad()
@@ -91,3 +149,25 @@ def t_step(
     """
 
     # TODO
+    model.to(device)
+    model.eval()
+    mae: float = 0.0
+
+    for inputs, targets in tqdm(test_data, desc="Testing"):
+        inputs = inputs.to(device)
+        targets = targets.to(device)
+
+        # Normalize targets
+        targets = ((targets - mean) / std).float()
+
+        # Forward pass
+        outputs = model(inputs)
+        outputs = outputs * std + mean
+        targets = targets * std + mean
+
+        # Calculate mae
+        batch_mae = torch.mean(torch.abs(outputs - targets))
+        mae += batch_mae.item()
+
+    avg_mae: float = mae / len(test_data)
+    return avg_mae

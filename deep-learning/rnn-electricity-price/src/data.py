@@ -32,7 +32,10 @@ class ElectricDataset(Dataset):
                 prediction.
         """
 
-        # TODO
+        # set object attributes
+        self.dataset: torch.Tensor = torch.from_numpy(dataset["Price"].to_numpy())
+        self.dataset = self.dataset.view((-1, 24))
+        self.past_days: int = past_days
 
     def __len__(self) -> int:
         """
@@ -42,7 +45,7 @@ class ElectricDataset(Dataset):
             number of days in the dataset.
         """
 
-        # TODO
+        return self.dataset.size(0) - self.past_days
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
         """
@@ -59,7 +62,11 @@ class ElectricDataset(Dataset):
                 self.sequence. Dimensions: [24].
         """
 
-        # TODO
+        # extract values
+        past_values: torch.Tensor = self.dataset[index : index + self.past_days, :]
+        current_values: torch.Tensor = self.dataset[index + self.past_days, :]
+
+        return past_values, current_values
 
 
 def load_data(
@@ -92,6 +99,56 @@ def load_data(
     """
 
     # TODO
+    # create initial datasets
+    df_train_val: pd.DataFrame
+    df_test: pd.DataFrame
+    df_train_val, df_test = download_data(path=save_path)
+    df_test = pd.concat([df_train_val[-(past_days * 24) :], df_test], axis=0)
+    mean = df_train_val["Price"].mean()
+    std = df_train_val["Price"].std()
+    df_train_val["Price"] = (df_train_val["Price"] - mean) / std
+    df_test["Price"] = (df_test["Price"] - mean) / std
+
+    # split train data
+    df_train: pd.DataFrame = df_train_val[: -42 * 7 * 24]
+    df_val: pd.DataFrame = df_train_val[-42 * 7 * 24 :]
+    df_val = pd.concat([df_train[-(past_days * 24) :], df_val], axis=0)
+
+    # construct datasets
+    train_dataset: Dataset = ElectricDataset(df_train, past_days)
+    val_dataset: Dataset = ElectricDataset(df_val, past_days)
+    test_dataset: Dataset = ElectricDataset(df_test, past_days)
+
+    # define dataloaders
+    train_dataloader: DataLoader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        drop_last=drop_last,
+        num_workers=num_workers,
+    )
+    val_dataloader: DataLoader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=drop_last,
+        num_workers=num_workers,
+    )
+    test_dataloader: DataLoader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=drop_last,
+        num_workers=num_workers,
+    )
+
+    return (
+        train_dataloader,
+        val_dataloader,
+        test_dataloader,
+        mean,
+        std,
+    )
 
 
 def download_data(
