@@ -9,7 +9,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
 
-from src.constants import B, C, S
+from src.constants import B, C, S, TARGET_SIZE_IMG
 
 
 class RaccoonDataset(Dataset):
@@ -59,6 +59,23 @@ class RaccoonDataset(Dataset):
         """
 
         # TODO
+        # Tensor de ceros: shape [S, S, 5*B + C]
+        label = torch.zeros((S, S, 5 * B + C), dtype=torch.float32)
+        for box in boxes:
+            cls, x, y, w, h = box
+            # Celda de la cuadrícula
+            j = int(S * x)  # columna
+            i = int(S * y)  # fila
+            # Solo un objeto por celda
+            if label[i, j, C] == 0.0:  # Si no hay objeto, añade
+                label[i, j, 1] = 1.0  # one-hot de clase 1 (índice 1 en tu test)
+                label[i, j, C] = 1.0  # flag "has object"
+                x_cell = S * x - j
+                y_cell = S * y - i
+                w_cell = w * S
+                h_cell = h * S
+                label[i, j, C + 1 : C + 5] = torch.tensor([x_cell, y_cell, w_cell, h_cell])
+        return label
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
         """
@@ -73,3 +90,34 @@ class RaccoonDataset(Dataset):
         """
 
         # TODO
+
+        # Construir rutas de imagen y label asumiendo formato con índice
+        img_path = os.path.join(self.imgs_dir, f"raccoon-{index}.jpg")
+        label_path = os.path.join(self.labels_dir, f"{index}.txt")
+
+        # Abrir la imagen y convertir a RGB
+        image = Image.open(img_path).convert("RGB")
+
+        # Leer las cajas del archivo label
+        boxes = []
+        with open(label_path, "r") as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) == 5:
+                    # Primer valor es clase int, el resto float
+                    cls = int(parts[0])
+                    coords = list(map(float, parts[1:]))
+                    boxes.append([cls] + coords)
+
+        # Transformación de imagen: resize a TARGET_SIZE_IMG y tensor (C,H,W)
+        transform = transforms.Compose([
+            transforms.Resize(TARGET_SIZE_IMG),  # Cambia con la tuya, ej (400,400)
+            transforms.ToTensor(),
+        ])
+        image = transform(image)
+
+        # Generar tensor label con la función que ya tienes
+        label = self._generate_label(boxes)
+
+        return image, label
+        

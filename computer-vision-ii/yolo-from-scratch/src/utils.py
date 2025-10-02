@@ -29,6 +29,30 @@ def iou(
     """
 
     # TODO
+    # Convertir (cx, cy, w, h) a (x1, y1, x2, y2)
+    preds_xy1 = boxes_preds[..., :2] - boxes_preds[..., 2:] / 2
+    preds_xy2 = boxes_preds[..., :2] + boxes_preds[..., 2:] / 2
+    labels_xy1 = boxes_labels[..., :2] - boxes_labels[..., 2:] / 2
+    labels_xy2 = boxes_labels[..., :2] + boxes_labels[..., 2:] / 2
+
+    # Coordenadas de la intersección
+    inter_xy1 = torch.max(preds_xy1, labels_xy1)
+    inter_xy2 = torch.min(preds_xy2, labels_xy2)
+    inter_wh = (inter_xy2 - inter_xy1).clamp(min=0)
+
+    # Área intersección
+    inter_area = inter_wh[..., 0] * inter_wh[..., 1]
+
+    # Áreas de cajas
+    preds_area = (preds_xy2[..., 0] - preds_xy1[..., 0]) * (preds_xy2[..., 1] - preds_xy1[..., 1])
+    labels_area = (labels_xy2[..., 0] - labels_xy1[..., 0]) * (labels_xy2[..., 1] - labels_xy1[..., 1])
+
+    # IoU
+    iou = inter_area / (preds_area + labels_area - inter_area + EPSILON)
+
+    # [batch, S, S, 1]
+    return iou.unsqueeze(-1)
+
 
 
 def nms(
@@ -53,6 +77,40 @@ def nms(
     """
 
     # TODO
+    if len(predicted_boxes) == 0:
+        return []
+
+    # Filtrar por confianza
+    boxes = [b for b in predicted_boxes if b[1] >= threshold_confidence]
+
+    # Ordenar por confianza descendente
+    boxes.sort(key=lambda x: x[1], reverse=True)
+
+    selected = []
+    while boxes:
+        chosen = boxes.pop(0)
+        selected.append(chosen)
+
+        remaining = []
+        for box in boxes:
+            # Si son de distinta clase, no eliminamos
+            if box[0] != chosen[0]:
+                remaining.append(box)
+                continue
+
+            # Calcular IoU
+            iou_val = iou(
+                chosen[None, None, None, 2:],  # [1,1,1,4]
+                box[None, None, None, 2:],
+            ).item()
+
+            if iou_val < threshold_repeated:
+                remaining.append(box)
+
+        boxes = remaining
+
+    return selected
+    
 
 
 def to_image_coords(boxes: torch.Tensor, img_w: int, img_h: int) -> list[torch.Tensor]:
@@ -71,6 +129,48 @@ def to_image_coords(boxes: torch.Tensor, img_w: int, img_h: int) -> list[torch.T
     """
 
     # TODO
+    boxes_in_image = []
+
+    cell_size_w = 1.0 / S
+    cell_size_h = 1.0 / S
+
+    for i in range(S):
+        for j in range(S):
+            class_probs = boxes[i, j, :C]
+            p_object = boxes[i, j, C]
+
+            for b in range(B):
+                base = 5 * b + C + 1
+
+                x_cell = boxes[i, j, base]
+                y_cell = boxes[i, j, base + 1]
+                w_cell = boxes[i, j, base + 2]
+                h_cell = boxes[i, j, base + 3]
+
+                x_abs = (j + x_cell) * cell_size_w
+                y_abs = (i + y_cell) * cell_size_h
+                w_abs = w_cell * cell_size_w
+                h_abs = h_cell * cell_size_h
+
+                x_img = x_abs * img_w
+                y_img = y_abs * img_h
+                w_img = w_abs * img_w
+                h_img = h_abs * img_h
+
+                box_tensor = torch.zeros(C + 5)
+
+                box_tensor[:C] = class_probs
+                # El p_object para la caja específica debe considerarse, si todos aplican igual p_object,
+                # puedes repetir el mismo, o asignar 0 si quieres diferenciar
+                box_tensor[C] = p_object
+
+                box_tensor[C + 1 : C + 5] = torch.tensor([x_img, y_img, w_img, h_img])
+
+                boxes_in_image.append(box_tensor)
+
+    return boxes_in_image
+    
+    
 
 
 # This last part is just to calculate the mAP. It is a little bit annoying.

@@ -33,5 +33,5 @@ MODEL: list[tuple[int, int, int, int] | str] = [
 
 LR = 1e-3
 BATCH_SIZE = 16
-EPOCHS = 50
+EPOCHS = 60
 PATH_MODEL = "weights/YOLO.pt"

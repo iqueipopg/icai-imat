@@ -4,7 +4,6 @@ Script to define the architecture for the model.
 
 import torch
 from PIL import Image, ImageDraw
-from PIL.JpegImagePlugin import JpegImageFile
 from torch import nn
 from torchvision import transforms
 
@@ -98,7 +97,25 @@ class YOLO(nn.Module):
             Architecture of the convolutional layers.
         """
 
-        # TODO
+        layers: list[nn.Module] = []
+        current_in_channels = in_channels
+
+        for layer_spec in architecture:
+            if isinstance(layer_spec, tuple):
+                kernel_size, out_channels, stride, padding = layer_spec
+
+                layers.append(
+                    CNNBlock(
+                        current_in_channels, out_channels, kernel_size, stride, padding
+                    )
+                )
+
+                current_in_channels = out_channels
+
+            elif layer_spec == "M":
+                layers.append(nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)))
+
+        return nn.Sequential(*layers)
 
     def _create_mlp(self) -> nn.Module:
         """
@@ -109,7 +126,15 @@ class YOLO(nn.Module):
             Architecture of the fully connected layers.
         """
 
-        # TODO
+        output_size = S * S * (5 * B + C)
+
+        return nn.Sequential(
+            nn.Flatten(),
+            nn.LazyLinear(1024),
+            nn.LeakyReLU(0.1),
+            nn.Dropout(0.5),
+            nn.Linear(1024, output_size),
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -122,7 +147,19 @@ class YOLO(nn.Module):
             Output tensor: Dimensions: [batch, S, S, 5 * B + C].
         """
 
-        # TODO
+        x = self.cnn(x)
+
+        x = self.mlp(x)
+
+        x = x.view(-1, S, S, 5 * B + C)
+
+
+        # x[..., :C] = torch.sigmoid(x[..., :C])
+
+        # x[..., C] = torch.sigmoid(x[..., C])
+        # x[..., C + 5] = torch.sigmoid(x[..., C + 5])
+
+        return x
 
     def predict(self, img_path: str) -> list[torch.Tensor]:
         """
@@ -149,7 +186,7 @@ class YOLO(nn.Module):
 
         return nms(scaled_boxes)
 
-    def draw_predictions(self, img_path: str, output_path: str = "") -> JpegImageFile:
+    def draw_predictions(self, img_path: str, output_path: str = "") -> Image.Image:
         """
         Draws the predicted bounding boxes of the image.
 
@@ -167,7 +204,6 @@ class YOLO(nn.Module):
 
         for predicted_box in predicted_boxes:
             c_x, c_y, width, height = predicted_box[C + 1 :]
-            # Change coordinates to (x1, y1, x2, y2)
             try:
                 output_img.rectangle(
                     [
@@ -179,10 +215,10 @@ class YOLO(nn.Module):
                     outline="red",
                     width=3,
                 )
-            except ValueError:  # wrong coordinates (for example, y1 < y0)
+            except ValueError:
                 pass
 
         if output_path:
             img.save(output_path)
 
-        return img  # type: ignore
+        return img
