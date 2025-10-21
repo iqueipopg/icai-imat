@@ -86,3 +86,45 @@ class IntegratedGradients(nn.Module):
         """
 
         # TODO
+        self.model.eval()
+        batch_size, channels, height, width = x.shape
+
+        # Inicializa el baseline
+        baseline_tensor = self._initialize_baseline(channels, height, width, baseline)
+        baseline_tensor = baseline_tensor.to(x.device).unsqueeze(0).expand(batch_size, -1, -1, -1)
+
+        # Genera puntos interpolados a lo largo de la línea entre baseline y x
+        alphas = torch.linspace(0, 1, steps=n_steps, device=x.device)
+        # Forma: [n_steps, batch, channels, height, width]
+        interpolated = baseline_tensor.unsqueeze(0) + alphas.view(-1, 1, 1, 1, 1) * (x.unsqueeze(0) - baseline_tensor.unsqueeze(0))
+
+        # Prepara tensor de gradientes acumulados
+        integrated_gradients = torch.zeros_like(x)
+
+        for i in range(n_steps):
+            interpolated_input = interpolated[i]
+            interpolated_input.requires_grad_(True)
+
+            output = self.model(interpolated_input)
+            # Selecciona el valor de la clase objetivo
+            if target_class is None:
+                idx = output.argmax(dim=1)
+            else:
+                idx = torch.full((batch_size,), target_class, dtype=torch.long, device=x.device)
+            score = output[torch.arange(batch_size), idx]
+            grads = torch.autograd.grad(score, interpolated_input, torch.ones_like(score), retain_graph=False)[0]
+            integrated_gradients += grads
+
+        # Promedia las gradientes a lo largo de la trayectoria
+        avg_gradients = integrated_gradients / n_steps
+
+        # Integrated Gradients: multiplicar por diferencia entre input y baseline
+        ig = (x - baseline_tensor) * avg_gradients
+
+        # Selección de canal por pixel: similar al saliency map, tomar máximo absoluto en canal
+        attribution = ig.abs().max(dim=1)[0]
+
+        # Normalización final
+        attribution = normalize_tensor(attribution)
+
+        return attribution

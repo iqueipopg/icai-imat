@@ -139,6 +139,24 @@ class Visualizer:
         """
 
         # TODO
+        # Copia la imagen original para no modificarla
+        img_masked = img.copy()
+        h, w, c = img_masked.shape
+        total_pixels = h * w
+
+        # Número de píxeles a enmascarar en este paso
+        k = int(percentage * step * total_pixels)
+        if k == 0:
+            return img_masked
+
+        # Obtén los índices a enmascarar
+        pixels_to_mask = flat_idx[:k]
+        # Convierte los índices planos a pares (fila, columna)
+        rows, cols = np.unravel_index(pixels_to_mask, (h, w))
+        # Asigna cero a esos píxeles en todas las bandas
+        img_masked[rows, cols, :] = 0
+
+        return img_masked
 
     @staticmethod
     def _plot_fig(
@@ -201,3 +219,37 @@ class Visualizer:
                 clear_folder(output_folder)
 
         # TODO
+        output_folder = ""
+        if save_figs:
+            output_folder = (
+                f"images/remove/{(self.explainer.__class__.__name__).lower()}/"
+                f"{'top' if remove_top else 'worst'}"
+            )
+            if not os.path.exists(output_folder):
+                os.makedirs(output_folder)
+            else:
+                clear_folder(output_folder)
+
+        h, w = self.unnorm_image.shape[1], self.unnorm_image.shape[2]
+        img_np = np.transpose(
+            self.unnorm_image.clone().cpu().numpy(), (1, 2, 0)
+        )  # [H, W, C]
+        explanation_np = self.explanation.cpu().numpy().flatten()  # [H*W]
+
+        total_pixels = h * w
+        steps = int(1 / percentage)
+
+        # Orden de píxeles según explicación (mayor es más relevante)
+        if remove_top:
+            flat_idx = np.argsort(-explanation_np)
+        else:
+            flat_idx = np.argsort(explanation_np)
+
+        for step in range(steps + 1):
+            # Mascara los píxeles
+            img_step = self._mask_pixels(img_np, flat_idx, percentage, step)
+            # Opcional: guardar figura
+            if save_figs:
+                self._plot_fig(
+                    percentage, step, img_step, output_folder, remove_top
+                )

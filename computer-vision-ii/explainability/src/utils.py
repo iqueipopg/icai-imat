@@ -31,7 +31,35 @@ def saliency_map(
     """
 
     # TODO
+    # Poner el modelo en modo evaluación
+    model.eval()
 
+    # Habilitar gradientes para la entrada
+    x = x.clone().detach().requires_grad_(True)
+
+    # Forward pass
+    outputs = model(x)
+
+    # Seleccionar la clase objetivo
+    if target_class is None:
+        target_class = outputs.argmax(dim=1)
+
+    # Seleccionar la salida correspondiente a cada clase objetivo
+    selected_outputs = outputs[torch.arange(outputs.size(0)), target_class]
+
+    # Backward pass
+    selected_outputs.backward(torch.ones_like(selected_outputs))
+
+    # Obtener gradientes
+    gradients = x.grad
+    if gradients is None:
+        raise RuntimeError("Gradients are None. Check if input requires_grad=True.")
+
+    # Calcular el mapa de saliencia como el máximo del valor absoluto por canal
+    saliency = gradients.abs().max(dim=1)[0]
+
+    return saliency
+    
 
 def normalize_tensor(explanation: torch.Tensor) -> torch.Tensor:
     """
