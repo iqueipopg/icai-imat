@@ -28,7 +28,7 @@ Every assignment started from a starter repository from the course staff. Its fo
 | 3 | Natural Language Processing | [NerD](https://github.com/iqueipopg/NerD) | Multitask BiLSTM for named entities and sentiment in news |
 | 4 | Reinforcement Learning | [DiSpAtCh](https://github.com/iqueipopg/DiSpAtCh) | Double DQN agent for warehouse navigation and delivery |
 
-My final degree project, [SAM](https://github.com/iqueipopg/SAM-overview), automates systematic reviews and meta-analyses with nine LLM agents.
+My final degree project, [SAM](https://github.com/iqueipopg/SAM), automates systematic reviews and meta-analyses with nine LLM agents.
 
 ## What is not here
 
