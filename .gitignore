@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+data/
+models/
+model/
+runs/
+weights/
+*.pt
+*.pth
+.DS_Store
+.ipynb_checkpoints/
